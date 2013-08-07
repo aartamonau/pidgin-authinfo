@@ -92,7 +92,8 @@ plugin_unload(PurplePlugin *plugin)
     return TRUE;
 }
 
-static void init_plugin(PurplePlugin *plugin) {
+static void
+init_plugin(PurplePlugin *plugin) {
 }
 
 static PurplePluginInfo info = {
