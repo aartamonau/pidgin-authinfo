@@ -2,6 +2,7 @@
 
 #define PURPLE_PLUGINS
 
+#include <string.h>
 #include <glib.h>
 
 #include <debug.h>
@@ -13,22 +14,74 @@
 
 #define PLUGIN_ID "core-authinfo"
 
+static const char *get_protocol(const char *protocol_id);
+
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
+    enum authinfo_result_t ret;
+    char *password_file;
+    struct authinfo_data_t *password_data;
+
+    ret = authinfo_init();
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to initialize authinfo: %s\n",
+                           authinfo_strerror(ret));
+        return FALSE;
+    }
+
+    ret = authinfo_find_file(&password_file);
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to find password file: %s\n",
+                           authinfo_strerror(ret));
+        return FALSE;
+    }
+
+    ret = authinfo_data_from_file(password_file, &password_data);
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to read password file: %s\n",
+                           authinfo_strerror(ret));
+        free(password_file);
+        return FALSE;
+    }
+
+    free(password_file);
+
     GList *accounts;
 
     for (accounts = purple_accounts_get_all();
          accounts != NULL;
          accounts = accounts->next) {
+        struct authinfo_parse_entry_t entry;
         PurpleAccount *account = accounts->data;
+        const char *protocol = get_protocol(account->protocol_id);
 
-        purple_debug_info(PLUGIN_ID,
-                          "Found account: username %s, alias %s, password %s, "
-                          "user_info %s, protocol_id %s",
-                          account->username, account->alias, account->password,
-                          account->user_info, account->protocol_id);
+        ret = authinfo_simple_query(password_data,
+                                    NULL, protocol, account->username,
+                                    &entry, NULL);
+
+        purple_debug_info(PLUGIN_ID, "Searching password for %s:%s -> %s\n",
+                          protocol, account->username, authinfo_strerror(ret));
+
+        if (ret != AUTHINFO_OK && ret != AUTHINFO_ENOMATCH) {
+            purple_debug_fatal(PLUGIN_ID,
+                               "Failed while searching for password (%s:%s): %s\n",
+                               protocol, account->username,
+                               authinfo_strerror(ret));
+            break;
+        }
+
+        if (ret == AUTHINFO_OK && entry.password != NULL) {
+            purple_debug_info(PLUGIN_ID, "Found password for %s:%s\n",
+                              protocol, account->username);
+        }
+
+        if (ret == AUTHINFO_OK) {
+            authinfo_parse_entry_free(&entry);
+        }
     }
+
+    authinfo_data_free(password_data);
 
     return TRUE;
 }
@@ -72,3 +125,18 @@ static PurplePluginInfo info = {
 };
 
 PURPLE_INIT_PLUGIN(authinfo, init_plugin, info)
+
+/* internal functions */
+#define PURPLE_PREFIX "prpl-"
+
+static const char *
+get_protocol(const char *protocol_id)
+{
+    size_t n = strlen(PURPLE_PREFIX);
+
+    if (strncmp(protocol_id, PURPLE_PREFIX, n) == 0) {
+        return protocol_id + n;
+    }
+
+    return protocol_id;
+}
