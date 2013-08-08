@@ -60,9 +60,6 @@ plugin_load(PurplePlugin *plugin)
                                     NULL, protocol, account->username,
                                     &entry, NULL);
 
-        purple_debug_info(PLUGIN_ID, "Searching password for %s:%s -> %s\n",
-                          protocol, account->username, authinfo_strerror(ret));
-
         if (ret != AUTHINFO_OK && ret != AUTHINFO_ENOMATCH) {
             purple_debug_fatal(PLUGIN_ID,
                                "Failed while searching for password (%s:%s): %s\n",
@@ -73,6 +70,9 @@ plugin_load(PurplePlugin *plugin)
 
         if (ret == AUTHINFO_OK && entry.password != NULL) {
             purple_debug_info(PLUGIN_ID, "Found password for %s:%s\n",
+                              protocol, account->username);
+        } else {
+            purple_debug_info(PLUGIN_ID, "Couldn't find a password for %s:%s\n",
                               protocol, account->username);
         }
 
