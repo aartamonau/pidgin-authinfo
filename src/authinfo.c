@@ -16,6 +16,9 @@
 
 static const char *get_protocol(const char *protocol_id);
 static struct authinfo_data_t *read_password_data();
+static gboolean query(const struct authinfo_data_t *data,
+                      const PurpleAccount *account,
+                      struct authinfo_parse_entry_t *entry);
 
 static gboolean
 plugin_load(PurplePlugin *plugin)
@@ -42,29 +45,9 @@ plugin_load(PurplePlugin *plugin)
          accounts = accounts->next) {
         struct authinfo_parse_entry_t entry;
         PurpleAccount *account = accounts->data;
-        const char *protocol = get_protocol(account->protocol_id);
 
-        ret = authinfo_simple_query(password_data,
-                                    NULL, protocol, account->username,
-                                    &entry, NULL);
-
-        if (ret != AUTHINFO_OK && ret != AUTHINFO_ENOMATCH) {
-            purple_debug_fatal(PLUGIN_ID,
-                               "Failed while searching for password (%s:%s): %s\n",
-                               protocol, account->username,
-                               authinfo_strerror(ret));
-            break;
-        }
-
-        if (ret == AUTHINFO_OK && entry.password != NULL) {
-            purple_debug_info(PLUGIN_ID, "Found password for %s:%s\n",
-                              protocol, account->username);
-        } else {
-            purple_debug_info(PLUGIN_ID, "Couldn't find a password for %s:%s\n",
-                              protocol, account->username);
-        }
-
-        if (ret == AUTHINFO_OK) {
+        if (query(password_data, account, &entry)) {
+            (void) entry;
             authinfo_parse_entry_free(&entry);
         }
     }
@@ -155,4 +138,38 @@ read_password_data()
 
     free(file);
     return data;
+}
+
+static gboolean
+query(const struct authinfo_data_t *data, const PurpleAccount *account,
+      struct authinfo_parse_entry_t *entry)
+{
+    const char *username = purple_account_get_username(account);
+    const char *protocol_id = purple_account_get_protocol_id(account);
+    const char *protocol = get_protocol(protocol_id);
+
+    enum authinfo_result_t ret;
+
+    ret = authinfo_simple_query(data, NULL, protocol, username, entry, NULL);
+    if (ret != AUTHINFO_OK && ret != AUTHINFO_ENOMATCH) {
+        purple_debug_fatal(PLUGIN_ID,
+                           "Failure while searching for password (%s:%s): %s\n",
+                           protocol, username, authinfo_strerror(ret));
+        return FALSE;
+    }
+
+    if (ret == AUTHINFO_OK && entry->password != NULL) {
+        purple_debug_info(PLUGIN_ID, "Found password for %s:%s\n",
+                          protocol, username);
+        return TRUE;
+    }
+
+    purple_debug_info(PLUGIN_ID, "Couldn't find a password for %s:%s\n",
+                      protocol, username);
+
+    if (ret == AUTHINFO_OK) {
+        authinfo_parse_entry_free(entry);
+    }
+
+    return FALSE;
 }
