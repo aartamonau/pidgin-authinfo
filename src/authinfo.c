@@ -15,12 +15,12 @@
 #define PLUGIN_ID "core-authinfo"
 
 static const char *get_protocol(const char *protocol_id);
+static struct authinfo_data_t *read_password_data();
 
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
     enum authinfo_result_t ret;
-    char *password_file;
     struct authinfo_data_t *password_data;
 
     ret = authinfo_init();
@@ -30,22 +30,10 @@ plugin_load(PurplePlugin *plugin)
         return FALSE;
     }
 
-    ret = authinfo_find_file(&password_file);
-    if (ret != AUTHINFO_OK) {
-        purple_debug_fatal(PLUGIN_ID, "Failed to find password file: %s\n",
-                           authinfo_strerror(ret));
+    password_data = read_password_data();
+    if (password_data == NULL) {
         return FALSE;
     }
-
-    ret = authinfo_data_from_file(password_file, &password_data);
-    if (ret != AUTHINFO_OK) {
-        purple_debug_fatal(PLUGIN_ID, "Failed to read password file: %s\n",
-                           authinfo_strerror(ret));
-        free(password_file);
-        return FALSE;
-    }
-
-    free(password_file);
 
     GList *accounts;
 
@@ -140,4 +128,31 @@ get_protocol(const char *protocol_id)
     }
 
     return protocol_id;
+}
+
+static struct authinfo_data_t *
+read_password_data()
+{
+    enum authinfo_result_t ret;
+
+    char *file;
+    struct authinfo_data_t *data;
+
+    ret = authinfo_find_file(&file);
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to find password file: %s\n",
+                           authinfo_strerror(ret));
+        return NULL;
+    }
+
+    ret = authinfo_data_from_file(file, &data);
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to read password file: %s\n",
+                           authinfo_strerror(ret));
+        free(file);
+        return NULL;
+    }
+
+    free(file);
+    return data;
 }
