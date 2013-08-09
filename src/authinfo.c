@@ -22,6 +22,8 @@ static gboolean query(const struct authinfo_data_t *data,
 static void set_password(PurpleAccount *account,
                          struct authinfo_parse_entry_t *entry);
 
+static void on_account_enabled(PurpleAccount *account);
+
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
@@ -55,6 +57,9 @@ plugin_load(PurplePlugin *plugin)
     }
 
     authinfo_data_free(password_data);
+
+    purple_signal_connect(purple_accounts_get_handle(), "account-enabled",
+                          plugin, PURPLE_CALLBACK(on_account_enabled), NULL);
 
     return TRUE;
 }
@@ -196,4 +201,24 @@ set_password(PurpleAccount *account, struct authinfo_parse_entry_t *entry)
 
         purple_debug_info("Set password for %s:%s", protocol, username);
     }
+}
+
+static void
+on_account_enabled(PurpleAccount *account)
+{
+    struct authinfo_data_t *data;
+    struct authinfo_parse_entry_t entry;
+
+    data = read_password_data();
+    if (!data) {
+        return;
+    }
+
+    if (!query(data, account, &entry)) {
+        authinfo_data_free(data);
+        return;
+    }
+
+    set_password(account, &entry);
+    authinfo_data_free(data);
 }
