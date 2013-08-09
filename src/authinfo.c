@@ -19,6 +19,8 @@ static struct authinfo_data_t *read_password_data();
 static gboolean query(const struct authinfo_data_t *data,
                       const PurpleAccount *account,
                       struct authinfo_parse_entry_t *entry);
+static void set_password(PurpleAccount *account,
+                         struct authinfo_parse_entry_t *entry);
 
 static gboolean
 plugin_load(PurplePlugin *plugin)
@@ -47,7 +49,7 @@ plugin_load(PurplePlugin *plugin)
         PurpleAccount *account = accounts->data;
 
         if (query(password_data, account, &entry)) {
-            (void) entry;
+            set_password(account, &entry);
             authinfo_parse_entry_free(&entry);
         }
     }
@@ -172,4 +174,26 @@ query(const struct authinfo_data_t *data, const PurpleAccount *account,
     }
 
     return FALSE;
+}
+
+static void
+set_password(PurpleAccount *account, struct authinfo_parse_entry_t *entry)
+{
+    const char *password;
+    enum authinfo_result_t ret;
+
+    const char *username = purple_account_get_username(account);
+    const char *protocol_id = purple_account_get_protocol_id(account);
+    const char *protocol = get_protocol(protocol_id);
+
+    ret = authinfo_password_extract(entry->password, &password);
+    if (ret != AUTHINFO_OK) {
+        purple_debug_fatal("Couldn't get password for %s:%s: %s\n",
+                           protocol, username, authinfo_strerror(ret));
+    } else {
+        purple_account_set_remember_password(account, FALSE);
+        purple_account_set_password(account, password);
+
+        purple_debug_info("Set password for %s:%s", protocol, username);
+    }
 }
