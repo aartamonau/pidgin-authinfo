@@ -5,6 +5,7 @@
 #include <string.h>
 #include <glib.h>
 
+#include <core.h>
 #include <debug.h>
 #include <plugin.h>
 #include <version.h>
@@ -73,7 +74,15 @@ plugin_load(PurplePlugin *plugin)
         PurpleAccount *account = accounts->data;
 
         if (query(plugin_data, account, &entry)) {
-            set_password(account, &entry);
+            const char *ui = purple_core_get_ui();
+            bool enabled = purple_account_get_enabled(account, ui);
+
+            if (enabled) {
+                set_password(account, &entry);
+            } else {
+                do_set_password(account, "dummy password");
+            }
+
             authinfo_parse_entry_free(&entry);
         }
     }
