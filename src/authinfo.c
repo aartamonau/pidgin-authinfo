@@ -32,6 +32,7 @@ static gboolean query(const struct plugin_data_t *plugin_data,
                       struct authinfo_parse_entry_t *entry);
 static void set_password(PurpleAccount *account,
                          struct authinfo_parse_entry_t *entry);
+static void do_set_password(PurpleAccount *account, const char *password);
 
 static void on_account_connecting(PurpleAccount *account,
                                   struct plugin_data_t *plugin_data);
@@ -231,11 +232,16 @@ set_password(PurpleAccount *account, struct authinfo_parse_entry_t *entry)
         purple_debug_fatal("Couldn't get password for %s:%s: %s\n",
                            protocol, username, authinfo_strerror(ret));
     } else {
-        purple_account_set_remember_password(account, FALSE);
-        purple_account_set_password(account, password);
-
+        do_set_password(account, password);
         purple_debug_info("Set password for %s:%s", protocol, username);
     }
+}
+
+static void
+do_set_password(PurpleAccount *account, const char *password)
+{
+    purple_account_set_remember_password(account, FALSE);
+    purple_account_set_password(account, password);
 }
 
 static gboolean
