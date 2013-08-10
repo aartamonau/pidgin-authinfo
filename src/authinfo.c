@@ -13,22 +13,35 @@
 #include <authinfo.h>
 
 #define PLUGIN_ID "core-authinfo"
+#define CACHE_TTL 10
+
+struct plugin_data_t {
+    struct authinfo_data_t *password_data;
+    uint drop_password_data_timer;
+};
 
 static const char *get_protocol(const char *protocol_id);
+
+static gboolean fill_password_data(struct plugin_data_t *plugin_data);
+static void rearm_drop_password_data_timer(struct plugin_data_t *plugin_data);
+static void cancel_drop_password_data_timer(struct plugin_data_t *plugin_data);
+
 static struct authinfo_data_t *read_password_data();
-static gboolean query(const struct authinfo_data_t *data,
+static gboolean query(const struct plugin_data_t *plugin_data,
                       const PurpleAccount *account,
                       struct authinfo_parse_entry_t *entry);
 static void set_password(PurpleAccount *account,
                          struct authinfo_parse_entry_t *entry);
 
-static void on_account_enabled(PurpleAccount *account);
+static void on_account_connecting(PurpleAccount *account,
+                                  struct plugin_data_t *plugin_data);
+static gboolean on_drop_password_data_timer(struct plugin_data_t *plugin_data);
 
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
     enum authinfo_result_t ret;
-    struct authinfo_data_t *password_data;
+    struct plugin_data_t *plugin_data;
 
     ret = authinfo_init();
     if (ret != AUTHINFO_OK) {
@@ -37,8 +50,16 @@ plugin_load(PurplePlugin *plugin)
         return FALSE;
     }
 
-    password_data = read_password_data();
-    if (password_data == NULL) {
+    plugin_data = malloc(sizeof(*plugin_data));
+    if (plugin_data == NULL) {
+        purple_debug_fatal(PLUGIN_ID, "Failed to allocate plugin specific data\n");
+        return FALSE;
+    }
+
+    plugin->extra = plugin_data;
+
+    if (!fill_password_data(plugin_data)) {
+        free(plugin_data);
         return FALSE;
     }
 
@@ -50,16 +71,15 @@ plugin_load(PurplePlugin *plugin)
         struct authinfo_parse_entry_t entry;
         PurpleAccount *account = accounts->data;
 
-        if (query(password_data, account, &entry)) {
+        if (query(plugin_data, account, &entry)) {
             set_password(account, &entry);
             authinfo_parse_entry_free(&entry);
         }
     }
 
-    authinfo_data_free(password_data);
-
-    purple_signal_connect(purple_accounts_get_handle(), "account-enabled",
-                          plugin, PURPLE_CALLBACK(on_account_enabled), NULL);
+    purple_signal_connect(purple_accounts_get_handle(), "account-connecting",
+                          plugin, PURPLE_CALLBACK(on_account_connecting),
+                          plugin_data);
 
     return TRUE;
 }
@@ -67,6 +87,16 @@ plugin_load(PurplePlugin *plugin)
 static gboolean
 plugin_unload(PurplePlugin *plugin)
 {
+    struct plugin_data_t *plugin_data = plugin->extra;
+
+    cancel_drop_password_data_timer(plugin_data);
+
+    if (plugin_data->password_data != NULL) {
+        authinfo_data_free(plugin_data->password_data);
+    }
+
+    free(plugin_data);
+
     return TRUE;
 }
 
@@ -148,16 +178,21 @@ read_password_data()
 }
 
 static gboolean
-query(const struct authinfo_data_t *data, const PurpleAccount *account,
+query(const struct plugin_data_t *plugin_data, const PurpleAccount *account,
       struct authinfo_parse_entry_t *entry)
 {
+    enum authinfo_result_t ret;
+
     const char *username = purple_account_get_username(account);
     const char *protocol_id = purple_account_get_protocol_id(account);
     const char *protocol = get_protocol(protocol_id);
 
-    enum authinfo_result_t ret;
+    const struct authinfo_data_t *password_data = plugin_data->password_data;
 
-    ret = authinfo_simple_query(data, NULL, protocol, username, entry, NULL);
+    g_assert(password_data != NULL);
+
+    ret = authinfo_simple_query(password_data, NULL,
+                                protocol, username, entry, NULL);
     if (ret != AUTHINFO_OK && ret != AUTHINFO_ENOMATCH) {
         purple_debug_fatal(PLUGIN_ID,
                            "Failure while searching for password (%s:%s): %s\n",
@@ -203,22 +238,70 @@ set_password(PurpleAccount *account, struct authinfo_parse_entry_t *entry)
     }
 }
 
-static void
-on_account_enabled(PurpleAccount *account)
+static gboolean
+fill_password_data(struct plugin_data_t *plugin_data)
 {
-    struct authinfo_data_t *data;
+    if (plugin_data->password_data == NULL) {
+        struct authinfo_data_t *password_data = read_password_data();
+
+        if (password_data == NULL) {
+            return FALSE;
+        }
+
+        plugin_data->password_data = password_data;
+    }
+
+    rearm_drop_password_data_timer(plugin_data);
+
+    return TRUE;
+}
+
+static void
+rearm_drop_password_data_timer(struct plugin_data_t *plugin_data)
+{
+    cancel_drop_password_data_timer(plugin_data);
+    plugin_data->drop_password_data_timer =
+        g_timeout_add_seconds(CACHE_TTL,
+                              (GSourceFunc) on_drop_password_data_timer,
+                              plugin_data);
+}
+
+static void
+cancel_drop_password_data_timer(struct plugin_data_t *plugin_data)
+{
+    if (plugin_data->drop_password_data_timer) {
+        g_source_remove(plugin_data->drop_password_data_timer);
+        plugin_data->drop_password_data_timer = 0;
+    }
+}
+
+static void
+on_account_connecting(PurpleAccount *account,
+                      struct plugin_data_t *plugin_data)
+{
+    if (account->password != NULL) {
+        return;
+    }
+
+    if (!fill_password_data(plugin_data)) {
+        return;
+    }
+
     struct authinfo_parse_entry_t entry;
-
-    data = read_password_data();
-    if (!data) {
-        return;
+    if (query(plugin_data, account, &entry)) {
+        set_password(account, &entry);
+        authinfo_parse_entry_free(&entry);
     }
+}
 
-    if (!query(data, account, &entry)) {
-        authinfo_data_free(data);
-        return;
-    }
+static gboolean
+on_drop_password_data_timer(struct plugin_data_t *plugin_data)
+{
+    g_assert(plugin_data->password_data != NULL);
+    authinfo_data_free(plugin_data->password_data);
 
-    set_password(account, &entry);
-    authinfo_data_free(data);
+    plugin_data->password_data = NULL;
+    plugin_data->drop_password_data_timer = 0;
+
+    return FALSE;
 }
