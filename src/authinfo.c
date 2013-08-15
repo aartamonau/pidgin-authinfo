@@ -19,6 +19,7 @@
 struct plugin_data_t {
     struct authinfo_data_t *password_data;
     uint drop_password_data_timer;
+    GList *managed_accounts;
 };
 
 static const char *get_protocol(const char *protocol_id);
@@ -34,8 +35,14 @@ static gboolean query(const struct plugin_data_t *plugin_data,
 static void set_password(PurpleAccount *account,
                          struct authinfo_parse_entry_t *entry);
 static void do_set_password(PurpleAccount *account, const char *password);
+static void maybe_wipe_password(PurpleAccount *account,
+                                struct plugin_data_t *plugin_data);
 
 static void on_account_connecting(PurpleAccount *account,
+                                  struct plugin_data_t *plugin_data);
+static void on_account_signed_on(PurpleAccount *account,
+                                 struct plugin_data_t *plugin_data);
+static void on_account_signed_off(PurpleAccount *account,
                                   struct plugin_data_t *plugin_data);
 static gboolean on_drop_password_data_timer(struct plugin_data_t *plugin_data);
 
@@ -60,6 +67,7 @@ plugin_load(PurplePlugin *plugin)
 
     plugin_data->password_data = NULL;
     plugin_data->drop_password_data_timer = 0;
+    plugin_data->managed_accounts = NULL;
 
     plugin->extra = plugin_data;
 
@@ -89,6 +97,14 @@ plugin_load(PurplePlugin *plugin)
                                  plugin, PURPLE_CALLBACK(on_account_connecting),
                                  plugin_data);
 
+    (void) purple_signal_connect(purple_accounts_get_handle(), "account-signed-on",
+                                 plugin, PURPLE_CALLBACK(on_account_signed_on),
+                                 plugin_data);
+
+    (void) purple_signal_connect(purple_accounts_get_handle(), "account-signed-off",
+                                 plugin, PURPLE_CALLBACK(on_account_signed_off),
+                                 plugin_data);
+
     return TRUE;
 }
 
@@ -102,6 +118,8 @@ plugin_unload(PurplePlugin *plugin)
     if (plugin_data->password_data != NULL) {
         authinfo_data_free(plugin_data->password_data);
     }
+
+    g_list_free(plugin_data->managed_accounts);
 
     free(plugin_data);
 
@@ -289,6 +307,17 @@ cancel_drop_password_data_timer(struct plugin_data_t *plugin_data)
 }
 
 static void
+maybe_wipe_password(PurpleAccount *account, struct plugin_data_t *plugin_data)
+{
+    GList *item = g_list_find(plugin_data->managed_accounts, account);
+    if (item) {
+        do_set_password(account, "dummy password");
+        plugin_data->managed_accounts =
+            g_list_delete_link(plugin_data->managed_accounts, item);
+    }
+}
+
+static void
 on_account_connecting(PurpleAccount *account,
                       struct plugin_data_t *plugin_data)
 {
@@ -301,7 +330,24 @@ on_account_connecting(PurpleAccount *account,
     if (query(plugin_data, account, &entry)) {
         set_password(account, &entry);
         authinfo_parse_entry_free(&entry);
+
+        plugin_data->managed_accounts =
+            g_list_append(plugin_data->managed_accounts, account);
     }
+}
+
+static void
+on_account_signed_on(PurpleAccount *account,
+                     struct plugin_data_t *plugin_data)
+{
+    maybe_wipe_password(account, plugin_data);
+}
+
+static void
+on_account_signed_off(PurpleAccount *account,
+                      struct plugin_data_t *plugin_data)
+{
+    maybe_wipe_password(account, plugin_data);
 }
 
 static gboolean
