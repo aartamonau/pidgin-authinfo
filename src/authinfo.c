@@ -77,12 +77,7 @@ plugin_load(PurplePlugin *plugin)
             const char *ui = purple_core_get_ui();
             bool enabled = purple_account_get_enabled(account, ui);
 
-            if (enabled) {
-                set_password(account, &entry);
-            } else {
-                do_set_password(account, "dummy password");
-            }
-
+            do_set_password(account, "dummy password");
             authinfo_parse_entry_free(&entry);
         }
     }
@@ -294,9 +289,6 @@ static void
 on_account_connecting(PurpleAccount *account,
                       struct plugin_data_t *plugin_data)
 {
-    if (account->password != NULL) {
-        return;
-    }
 
     if (!fill_password_data(plugin_data)) {
         return;
