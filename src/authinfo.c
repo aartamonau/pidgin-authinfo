@@ -87,9 +87,9 @@ plugin_load(PurplePlugin *plugin)
         }
     }
 
-    purple_signal_connect(purple_accounts_get_handle(), "account-connecting",
-                          plugin, PURPLE_CALLBACK(on_account_connecting),
-                          plugin_data);
+    (void) purple_signal_connect(purple_accounts_get_handle(), "account-connecting",
+                                 plugin, PURPLE_CALLBACK(on_account_connecting),
+                                 plugin_data);
 
     return TRUE;
 }
