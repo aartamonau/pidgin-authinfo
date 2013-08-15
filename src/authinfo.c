@@ -58,6 +58,9 @@ plugin_load(PurplePlugin *plugin)
         return FALSE;
     }
 
+    plugin_data->password_data = NULL;
+    plugin_data->drop_password_data_timer = 0;
+
     plugin->extra = plugin_data;
 
     if (!fill_password_data(plugin_data)) {
