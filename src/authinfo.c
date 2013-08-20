@@ -13,6 +13,8 @@
 
 #include <authinfo.h>
 
+#include "config.h"
+
 #define PLUGIN_ID "core-authinfo"
 #define CACHE_TTL 10
 
@@ -137,12 +139,12 @@ static PurplePluginInfo info = {
     .dependencies = NULL,
     .priority = PURPLE_PRIORITY_DEFAULT,
     .id = PLUGIN_ID,
-    .name = "authinfo",         /* TODO: take all of these from config.h */
-    .version = "0.1",
-    .summary = "Get passwords from authinfo",
-    .description = "Get passwords from authinfo",
-    .author = "Aliaksey Artamonau",
-    .homepage = "http://TODO",
+    .name = "authinfo",
+    .version = PACKAGE_VERSION,
+    .summary = "Read account passwords from authinfo file",
+    .description = "Read account passwords from authinfo file",
+    .author = "Aliaksey Artamonau <aliaksiej.artamonau@gmail.com>",
+    .homepage = "https://github.com/aartamonau/pidgin-authinfo",
     .load = plugin_load,
     .unload = plugin_unload,
     .destroy = NULL,
