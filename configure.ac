@@ -36,6 +36,4 @@ fi
 
 AC_SUBST([plugindir], [$with_purple_plugin_dir])
 
-echo "PIDGIN_AUTHINFO_LIBS: ${PIDGIN_AUTHINFO_LIBS}"
-
 AC_OUTPUT
