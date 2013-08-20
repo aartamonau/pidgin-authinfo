@@ -1,0 +1,35 @@
+#+AUTHOR: Aliaksey Artamonau
+#+EMAIL: aliaksiej.artamonau@gmail.com
+
+* What is pidgin-authinfo?
+
+  pidgin-authinfo is a plugin for [[http://pidgin.im/][Pidgin]] (or actually anything built
+  on top of [[https://developer.pidgin.im/wiki/WhatIsLibpurple][libpurple]]) that lets you store your passwords in [[https://github.com/aartamonau/authinfo][authinfo]]
+  files.
+
+* What does it do?
+
+  pidgin-authinfo works in one direction only: it allows reading
+  passwords from authinfo files, but it does not try to store any
+  passwords back. If it finds a password for certain account, it
+  removes it from Pidgin. Since authinfo files can optionally be
+  encrypted, this can be used as a means of not storing passwords in
+  clear text (which is the only supported way of storing passwords in
+  Pidgin as of now).
+
+* Configuring
+
+  Your authinfo file should look similar to the following:
+
+  #+BEGIN_EXAMPLE
+  user aliaksiej.artamonau@gmail.com/laptop protocol jabber password password
+  user aartamonau@irc.freenode.net protocol irc password password
+  #+END_EXAMPLE
+
+  To find out protocol/user pairs open Pidgin's debug window and load
+  the plugin. You will see something similar to this:
+
+  #+BEGIN_EXAMPLE
+  (00:29:23) core-authinfo: Couldn't find a password for irc:aartamonau@irc.freenode.net
+  (00:29:23) core-authinfo: Found password for jabber:aliaksiej.artamonau@gmail.com/laptop
+  #+END_EXAMPLE
