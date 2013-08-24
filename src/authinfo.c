@@ -40,13 +40,10 @@ static void do_set_password(PurpleAccount *account, const char *password);
 static void maybe_wipe_password(PurpleAccount *account,
                                 struct plugin_data_t *plugin_data);
 
-static void on_account_connecting(PurpleAccount *account,
-                                  struct plugin_data_t *plugin_data);
-static void on_account_signed_on(PurpleAccount *account,
-                                 struct plugin_data_t *plugin_data);
-static void on_account_signed_off(PurpleAccount *account,
-                                  struct plugin_data_t *plugin_data);
-static gboolean on_drop_password_data_timer(struct plugin_data_t *plugin_data);
+static void on_account_connecting(PurpleAccount *account, void *data);
+static void on_account_signed_on(PurpleAccount *account, void *data);
+static void on_account_signed_off(PurpleAccount *account, void *data);
+static gboolean on_drop_password_data_timer(void *data);
 
 static gboolean
 plugin_load(PurplePlugin *plugin)
@@ -292,8 +289,7 @@ rearm_drop_password_data_timer(struct plugin_data_t *plugin_data)
     cancel_drop_password_data_timer(plugin_data);
     plugin_data->drop_password_data_timer =
         g_timeout_add_seconds(CACHE_TTL,
-                              (GSourceFunc) on_drop_password_data_timer,
-                              plugin_data);
+                              on_drop_password_data_timer, plugin_data);
 }
 
 static void
@@ -317,9 +313,9 @@ maybe_wipe_password(PurpleAccount *account, struct plugin_data_t *plugin_data)
 }
 
 static void
-on_account_connecting(PurpleAccount *account,
-                      struct plugin_data_t *plugin_data)
+on_account_connecting(PurpleAccount *account, void *data)
 {
+    struct plugin_data_t *plugin_data = data;
 
     if (!fill_password_data(plugin_data)) {
         return;
@@ -336,22 +332,26 @@ on_account_connecting(PurpleAccount *account,
 }
 
 static void
-on_account_signed_on(PurpleAccount *account,
-                     struct plugin_data_t *plugin_data)
+on_account_signed_on(PurpleAccount *account, void *data)
 {
+    struct plugin_data_t *plugin_data = data;
+
     maybe_wipe_password(account, plugin_data);
 }
 
 static void
-on_account_signed_off(PurpleAccount *account,
-                      struct plugin_data_t *plugin_data)
+on_account_signed_off(PurpleAccount *account, void *data)
 {
+    struct plugin_data_t *plugin_data = data;
+
     maybe_wipe_password(account, plugin_data);
 }
 
 static gboolean
-on_drop_password_data_timer(struct plugin_data_t *plugin_data)
+on_drop_password_data_timer(void *data)
 {
+    struct plugin_data_t *plugin_data = data;
+
     g_assert(plugin_data->password_data != NULL);
     authinfo_data_free(plugin_data->password_data);
 
