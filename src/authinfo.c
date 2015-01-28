@@ -89,22 +89,19 @@ plugin_load(PurplePlugin *plugin)
 
     plugin->extra = plugin_data;
 
-    if (!fill_password_data(plugin_data)) {
-        free(plugin_data);
-        return FALSE;
-    }
+    if (fill_password_data(plugin_data)) {
+        GList *accounts;
 
-    GList *accounts;
+        for (accounts = purple_accounts_get_all();
+             accounts != NULL;
+             accounts = accounts->next) {
+            struct authinfo_parse_entry_t entry;
+            PurpleAccount *account = accounts->data;
 
-    for (accounts = purple_accounts_get_all();
-         accounts != NULL;
-         accounts = accounts->next) {
-        struct authinfo_parse_entry_t entry;
-        PurpleAccount *account = accounts->data;
-
-        if (query(plugin_data, account, &entry)) {
-            do_set_password(account, "dummy password");
-            authinfo_parse_entry_free(&entry);
+            if (query(plugin_data, account, &entry)) {
+                do_set_password(account, "dummy password");
+                authinfo_parse_entry_free(&entry);
+            }
         }
     }
 
